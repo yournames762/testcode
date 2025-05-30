@@ -28,7 +28,7 @@ def make_scheduler(optimizer, epochs, warmup_ratio=0.05, eta_min=0.0):
     # 1) Linear warm-up từ 0 → base_lr
     scheduler1 = LinearLR(
         optimizer,
-        start_factor=0.0,
+        start_factor=1e-8,
         end_factor=1.0,
         total_iters=warmup_epochs
     )

@@ -13,34 +13,78 @@ from torch.optim.lr_scheduler import (
 niter = 1e10
 
 
-def make_scheduler(optimizer, epochs,
-                   warmup_ratio=0.05,
-                   eta_min=0.0,
-                   eps=1e-8):                  #  ◀ thêm epsilon
+# def make_scheduler(optimizer, epochs,
+#                    warmup_ratio=0.05,
+#                    eta_min=0.0,
+#                    eps=1e-8):                  #  ◀ thêm epsilon
 
-    warmup_epochs = max(1, int(epochs * warmup_ratio))
+#     warmup_epochs = max(1, int(epochs * warmup_ratio))
 
-    # (1) Linear warm-up: từ eps → 1.0
-    scheduler1 = LinearLR(
+#     # (1) Linear warm-up: từ eps → 1.0
+#     scheduler1 = LinearLR(
+#         optimizer,
+#         start_factor=eps,       # dùng 1e-8 thay vì 0.0
+#         end_factor=1.0,
+#         total_iters=warmup_epochs
+#     )
+
+#     # (2) Cosine-annealing
+#     scheduler2 = CosineAnnealingLR(
+#         optimizer,
+#         T_max=epochs - warmup_epochs,
+#         eta_min=eta_min
+#     )
+
+#     # Ghép 2 scheduler
+#     return SequentialLR(
+#         optimizer,
+#         schedulers=[scheduler1, scheduler2],
+#         milestones=[warmup_epochs]
+#     )
+
+# ---------------------------------------------------------------------
+# Bổ sung cùng vị trí cũ trong clModel.py
+from torch.optim.lr_scheduler import LinearLR, CosineAnnealingLR, SequentialLR
+
+def make_scheduler(
+    optimizer,
+    epochs: int,
+    warmup_ratio: float = 0.05,
+    eta_min: float = 0.0,
+    eps: float = 1e-8,
+):
+    """
+    Linear warm-up + Cosine-annealing.
+    • Nếu tổng số epoch ≤ warm-up  → chỉ dùng Linear (hoặc Constant) cho an toàn.
+    • Ngược lại                 → Linear warm-up rồi đến Cosine-annealing.
+    """
+    # --- 1. Tính số epoch warm-up ---
+    warmup_epochs = max(1, int(round(epochs * warmup_ratio)))
+
+    # --- 2. Scheduler warm-up (từ eps → 1.0) ---
+    sched_warm = LinearLR(
         optimizer,
-        start_factor=eps,       # dùng 1e-8 thay vì 0.0
+        start_factor=eps,       # rất nhỏ nhưng > 0 nên không lỗi
         end_factor=1.0,
-        total_iters=warmup_epochs
+        total_iters=warmup_epochs,
     )
 
-    # (2) Cosine-annealing
-    scheduler2 = CosineAnnealingLR(
-        optimizer,
-        T_max=epochs - warmup_epochs,
-        eta_min=eta_min
-    )
-
-    # Ghép 2 scheduler
-    return SequentialLR(
-        optimizer,
-        schedulers=[scheduler1, scheduler2],
-        milestones=[warmup_epochs]
-    )
+    # --- 3. Nếu còn epoch sau warm-up → Cosine; ngược lại trả luôn sched_warm ---
+    if epochs > warmup_epochs:
+        sched_cos = CosineAnnealingLR(
+            optimizer,
+            T_max=epochs - warmup_epochs,   # luôn ≥ 1 nhờ nhánh if
+            eta_min=eta_min,
+        )
+        return SequentialLR(
+            optimizer,
+            schedulers=[sched_warm, sched_cos],
+            milestones=[warmup_epochs],
+        )
+    else:
+        # Trường hợp epochs == 1 : dùng LinearLR (hoặc ConstantLR) cho 1 epoch
+        return sched_warm
+# ---------------------------------------------------------------------
 
 
 def expRun(dataset, getExp, nexp, exps,cfg,grad_cam,tarLays,norm,actModel,lrpModel,netClaDec,netclact):

@@ -13,32 +13,29 @@ from torch.optim.lr_scheduler import (
 niter = 1e10
 
 
-def make_scheduler(optimizer, epochs, warmup_ratio=0.05, eta_min=0.0):
-    """
-    Trả về LR-scheduler Cosine với pha warm-up tuyến tính (LinearLR).
+def make_scheduler(optimizer, epochs,
+                   warmup_ratio=0.05,
+                   eta_min=0.0,
+                   eps=1e-8):                  #  ◀ thêm epsilon
 
-    Parameters
-    ----------
-    optimizer : torch.optim.Optimizer
-    epochs    : int  – tổng số epoch train
-    warmup_ratio : float – tỉ lệ warm-up (0.05 = 5 %)
-    eta_min   : float – learning-rate tối thiểu cuối training
-    """
     warmup_epochs = max(1, int(epochs * warmup_ratio))
-    # 1) Linear warm-up từ 0 → base_lr
+
+    # (1) Linear warm-up: từ eps → 1.0
     scheduler1 = LinearLR(
         optimizer,
-        start_factor=1e-8,
+        start_factor=eps,       # dùng 1e-8 thay vì 0.0
         end_factor=1.0,
         total_iters=warmup_epochs
     )
-    # 2) Cosine-annealing từ base_lr → eta_min
+
+    # (2) Cosine-annealing
     scheduler2 = CosineAnnealingLR(
         optimizer,
         T_max=epochs - warmup_epochs,
         eta_min=eta_min
     )
-    # Ghép 2 scheduler nối tiếp
+
+    # Ghép 2 scheduler
     return SequentialLR(
         optimizer,
         schedulers=[scheduler1, scheduler2],
@@ -257,7 +254,7 @@ def make_scheduler(optimizer, epochs, warmup_ratio=0.05, eta_min=0.0):
     # 1) Linear warm-up từ 0 → base_lr
     scheduler1 = LinearLR(
         optimizer,
-        start_factor=0.0,
+        start_factor=1e-8,
         end_factor=1.0,
         total_iters=warmup_epochs
     )
